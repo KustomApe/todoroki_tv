@@ -23,6 +23,7 @@ TABLE = 'tbody'
 COLUMN = 'tr.fs-s'
 TIME = 'td.eilist__time'
 NAME = 'p.fbd'
+SUB_NAME = 'p.fc-sub'
 IMPORTANT_LEVEL = 'img.i-star'
 MOVING_AVERAGE = 'td.eilist__move'
 DATAS = 'td.eilist__data'
@@ -57,7 +58,11 @@ while True: # Continue until getting the last page.
                         else:
                             print('Error')
                         name = table.find_element_by_css_selector(NAME).text
-                        print('指標名 : ' + name)
+                        if name:
+                            print('指標名 : ' + name)
+                        sub_name = table.find_element_by_css_selector(SUB_NAME).text
+                        if sub_name:
+                            print('メモ : ' + sub_name)
                         important_data = table.find_elements_by_css_selector(IMPORTANT_LEVEL)
                         if len(important_data) > 0:
                             nums = 0
