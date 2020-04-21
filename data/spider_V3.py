@@ -1,7 +1,9 @@
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
 import pandas as pd
 import time
+import requests
+from bs4 import BeautifulSoup as bs
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 
 # 初期設定
 options = webdriver.ChromeOptions()
@@ -9,12 +11,18 @@ options.add_argument('--headless')
 options.add_argument('--disable-gpu')
 options.add_argument('--lang=ja')
 browser = webdriver.Chrome(options=options, executable_path='./chromedriver')
-
-# データフレーム構築
-df = pd.DataFrame(columns=['release_time', 'time_launch', 'name', 'important_level', 'moving_average', 'data01', 'data02', 'data03'])
-
 # 取得先URL
 url = 'https://fx.minkabu.jp/indicators'
+
+# Basic settings
+res = requests.get(url)
+soup = bs(res.text, 'html5lib')
+captions = soup.find_all('caption')
+data = []
+
+# データフレーム構築
+df = pd.DataFrame(columns=['time_launch', 'name', 'important_level', 'moving_average', 'data01', 'data02', 'data03'])
+dfs = pd.DataFrame(index=['release_date'])
 
 # CSS Selectorの設定
 PAGER_NEXT = 'a.ml10'
@@ -34,36 +42,46 @@ DATE = 'caption.tlft'
 # 実行部分
 browser.get(url)
 
-while True: # Continue until getting the last page.
+while True:
     pager = browser.find_elements_by_css_selector(PAGER_NEXT)
-    if len(pager) > 0 and not [None, " "] in len(pager):
+    # 日時含めたテーブル
+    table_nums = browser.find_elements_by_css_selector(B_TABLE)
+    if len(pager) > 0 and len(table_nums) > 0:
         print('Start getting tables...')
-        table_nums = browser.find_elements_by_css_selector(B_TABLE)
-        if len(table_nums) > 0 and table_nums is not None:
-            dates = browser.find_elements_by_css_selector(B_TABLE)
+        for release in table_nums:
             n = 1
             m = str(n)
-            for date in dates:
-                release_date = date.find_element_by_css_selector(DATE).text
+            # テーブルタグの中の実際のデータ
+            base_tables = browser.find_element_by_xpath('/html/body/div/main/section/div/table[' + m + ']/tbody')
+            for base_table in table_nums:
+                release_date = release.find_element_by_css_selector(DATE).text
                 print(release_date)
-                base_table = browser.find_element_by_xpath('/html/body/div/main/section/div/table[' + m + ']/tbody')
                 tables = base_table.find_elements_by_tag_name(COLUMN)
-                n += 1
-                print(n)
+                print(len(tables))
                 for table in tables:
                     try:
+                        print(release_date)
                         time_release = table.find_element_by_css_selector(TIME)
                         time_launch = time_release.find_element_by_tag_name(TAG_SPAN).text
-                        if time_launch or time_launch == '':
+                        if time_launch:
+                            print('時間 : ' + time_launch)
+                        elif time_launch == ' ':
+                            time_launch = 'None'
                             print('時間 : ' + time_launch)
                         else:
                             print('Error')
+                            pass
                         name = table.find_element_by_css_selector(NAME).text
                         if name:
                             print('指標名 : ' + name)
                         sub_name = table.find_element_by_css_selector(SUB_NAME).text
                         if sub_name:
                             print('メモ : ' + sub_name)
+                        elif sub_name == ' ':
+                            sub_name = 'None'
+                            print('メモ : ' + sub_name)
+                        else:
+                            pass
                         important_data = table.find_elements_by_css_selector(IMPORTANT_LEVEL)
                         if len(important_data) > 0:
                             nums = 0
@@ -80,18 +98,19 @@ while True: # Continue until getting the last page.
                         print('前回(改定) : ' + data01)
                         print('予想 : ' + data02)
                         print('結果 : ' + data03)
-                        print('--------------------------------------')
-                        n += 1
-                    except NoSuchElementException as e:
-                        print(e)
-                btn = browser.find_element_by_css_selector(PAGER_NEXT).get_attribute('href')
-            print('next url:{}'.format(btn))
-            time.sleep(3)
-            browser.get(btn)
-            print('Moving to next page...')
+                    except NoSuchElementException:
+                        print('NA')
+                print('--------------------------------------')
+            n += 1
+        btn = browser.find_element_by_css_selector(PAGER_NEXT).get_attribute('href')
+        print('next url:{}'.format(btn))
+        time.sleep(3)
+        browser.get(btn)
+        print('Moving to next page...')
     else:
         print('No pager exist anymore.')
         break
 print('Finished scraping. Writing out to CSV......')
-df.to_csv('indicators_01.csv')
+# df_final = df.set_index([dfs])
+# print(df_final)
 print('Done')
